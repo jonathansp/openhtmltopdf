@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
@@ -23,6 +24,8 @@ import java.util.stream.IntStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSDocument;
+import org.apache.pdfbox.cos.COSArray;
+import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSObject;
 import org.apache.pdfbox.cos.COSString;
@@ -31,6 +34,7 @@ import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationFileAttachment;
@@ -59,6 +63,7 @@ import com.openhtmltopdf.layout.Layer;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.pdfboxout.PagePosition;
 import com.openhtmltopdf.pdfboxout.PdfBoxRenderer;
+import com.openhtmltopdf.pdfboxout.PdfBoxTextRenderer;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.testcases.TestcaseRunner;
 import com.openhtmltopdf.testlistener.PrintingRunner;
@@ -683,6 +688,44 @@ public class NonVisualRegressionTest {
             String text = new PDFTextStripper().getText(doc).replaceAll("[\r\n]", "");
             assertEquals("A#B", text);
         }
+    }
+
+    @Test
+    public void testIssue64NullCmapDoesNotThrow() throws Exception {
+        // An Identity-H Type 0 font has getCmapLookup() == null; the coverage
+        // check must fall back to getStringWidth instead of throwing NPE.
+        PDType0Font type0 = new PDType0Font(identityHType0Dictionary());
+        assertNull(type0.getCmapLookup());
+
+        Method containsCodePoint = PdfBoxTextRenderer.class
+                .getDeclaredMethod("containsCodePoint", PDFont.class, int.class);
+        containsCodePoint.setAccessible(true);
+
+        assertEquals(Boolean.FALSE, containsCodePoint.invoke(null, type0, (int) '日'));
+    }
+
+    private static COSDictionary identityHType0Dictionary() {
+        COSDictionary cidSystemInfo = new COSDictionary();
+        cidSystemInfo.setString(COSName.REGISTRY, "Adobe");
+        cidSystemInfo.setString(COSName.ORDERING, "Identity");
+        cidSystemInfo.setInt(COSName.SUPPLEMENT, 0);
+
+        COSDictionary cidFont = new COSDictionary();
+        cidFont.setItem(COSName.TYPE, COSName.FONT);
+        cidFont.setItem(COSName.SUBTYPE, COSName.CID_FONT_TYPE2);
+        cidFont.setName(COSName.BASE_FONT, "Test");
+        cidFont.setItem(COSName.CIDSYSTEMINFO, cidSystemInfo);
+
+        COSArray descendantFonts = new COSArray();
+        descendantFonts.add(cidFont);
+
+        COSDictionary type0 = new COSDictionary();
+        type0.setItem(COSName.TYPE, COSName.FONT);
+        type0.setItem(COSName.SUBTYPE, COSName.TYPE0);
+        type0.setName(COSName.BASE_FONT, "Test");
+        type0.setItem(COSName.ENCODING, COSName.IDENTITY_H);
+        type0.setItem(COSName.DESCENDANT_FONTS, descendantFonts);
+        return type0;
     }
 
     /**

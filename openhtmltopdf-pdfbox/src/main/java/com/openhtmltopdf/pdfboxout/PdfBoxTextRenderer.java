@@ -31,6 +31,7 @@ import com.openhtmltopdf.util.LogMessageId;
 import com.openhtmltopdf.util.OpenUtil;
 import com.openhtmltopdf.util.ThreadCtx;
 import com.openhtmltopdf.util.XRLog;
+import org.apache.fontbox.ttf.CmapLookup;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 
@@ -202,7 +203,10 @@ public class PdfBoxTextRenderer implements TextRenderer {
 
     private static boolean containsCodePoint(PDFont pdFont, int codePoint) {
         if (pdFont instanceof PDType0Font) {
-            return ((PDType0Font) pdFont).getCmapLookup().getGlyphId(codePoint) != 0;
+            CmapLookup cmap = ((PDType0Font) pdFont).getCmapLookup();
+            if (cmap != null) {
+                return cmap.getGlyphId(codePoint) != 0;
+            }
         }
         try {
             pdFont.getStringWidth(new String(Character.toChars(codePoint)));
